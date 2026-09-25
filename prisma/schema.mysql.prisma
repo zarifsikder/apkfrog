@@ -1,0 +1,293 @@
+// ApkForge — Prisma schema for MySQL (Vercel-ready)
+// Database: MySQL 5.7+ / MariaDB 10.2+
+// Set DATABASE_URL in Vercel Environment Variables:
+//   mysql://USER:PASS@HOST:3306/DBNAME
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  name         String
+  password     String
+  wallet       Int            @default(0)
+  plan         String         @default("Free")
+  banned       Boolean        @default(false)
+  referralCode String         @unique @default("REF0000")
+  referredBy   String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  sessions     Session[]
+  projects     Project[]
+  builds       Build[]
+  payments     Payment[]
+  notifications Notification[]
+  listings     Listing[]
+  purchases    Purchase[]     @relation("buyer")
+  sales        Purchase[]     @relation("seller")
+  coupons      Coupon[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("sessions")
+}
+
+model Project {
+  id        String        @id @default(cuid())
+  name      String
+  type      String
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  files     ProjectFile[]
+  builds    Build[]
+  listings  Listing[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@map("projects")
+}
+
+model ProjectFile {
+  id        String   @id @default(cuid())
+  path      String
+  content   String   @db.LongText
+  language  String   @default("plaintext")
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("project_files")
+}
+
+model Build {
+  id           String    @id @default(cuid())
+  appName      String
+  packageName  String
+  versionName  String    @default("1.0")
+  versionCode  Int       @default(1)
+  sourceType   String
+  sourceMode   String    @default("project")
+  websiteUrl   String?   @db.Text
+  zipPath      String?   @db.Text
+  config       String    @default("{}") @db.Text
+  status       String    @default("queued")
+  progress     Int       @default(0)
+  currentStep  String    @default("Connect")
+  logs         String    @db.LongText
+  apkPath      String?   @db.Text
+  apkSize      String?   @db.Text
+  error        String?   @db.Text
+  provider     String    @default("github")
+  runId        String?   @db.Text
+  runUrl       String?   @db.Text
+  artifactName String?   @db.Text
+  sourceSecret String?   @db.Text
+  sourceZip    String?   @db.LongText
+  dispatchedAt DateTime?
+  syncedAt     DateTime?
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId    String?
+  project      Project?  @relation(fields: [projectId], references: [id])
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+  @@index([status])
+  @@map("builds")
+}
+
+model Setting {
+  key       String   @id
+  value     String   @db.LongText
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model AppRelease {
+  id          String   @id @default(cuid())
+  versionName String
+  versionCode Int      @default(1)
+  notes       String   @db.Text
+  fileName    String
+  size        Int      @default(0)
+  downloads   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@map("app_releases")
+}
+
+model Template {
+  id            String   @id @default(cuid())
+  title         String
+  author        String
+  authorInitials String  @default("WV")
+  price         Int      @default(0)
+  category      String   @default("General")
+  views         Int      @default(0)
+  downloads     Int      @default(0)
+  featured      Boolean  @default(false)
+  previewType   String   @default("none")
+  previewText   String?  @db.Text
+  previewSub    String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  @@map("templates")
+}
+
+model Payment {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount       Int
+  method       String
+  senderNumber String
+  trxId        String
+  status       String    @default("pending")
+  gateway      String    @default("manual")
+  gatewayUrl   String?   @db.Text
+  verifiedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+  @@map("payments")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String   @db.Text
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model Plan {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String   @default("") @db.Text
+  price        Int      @default(0)
+  priceYearly  Int      @default(0)
+  features     String   @db.Text
+  accent       String   @default("violet")
+  isPopular    Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("plans")
+}
+
+// ─────────── Marketplace ───────────
+
+model Listing {
+  id           String   @id @default(cuid())
+  title        String
+  description  String   @default("") @db.Text
+  price        Int      @default(0)
+  category     String   @default("General")
+  tags         String   @default("") @db.Text
+  previewType  String   @default("gradient")
+  previewText  String?  @db.Text
+  previewSub   String?  @db.Text
+  status       String   @default("active")
+  salesCount   Int      @default(0)
+  views        Int      @default(0)
+  rating       Float    @default(0)
+  ratingCount  Int      @default(0)
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sellerId     String
+  seller       User     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  coupons      Coupon[]
+  purchases    Purchase[]
+  reviews      Review[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([sellerId])
+  @@index([status])
+  @@index([category])
+  @@map("listings")
+}
+
+model Purchase {
+  id             String   @id @default(cuid())
+  listingId      String
+  listing        Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyerId        String
+  buyer          User     @relation("buyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId       String
+  seller         User     @relation("seller", fields: [sellerId], references: [id], onDelete: Cascade)
+  projectId      String
+  projectName    String
+  originalPrice  Int
+  discount       Int      @default(0)
+  finalPrice     Int
+  couponCode     String?  @db.Text
+  couponId       String?  @db.Text
+  createdAt      DateTime @default(now())
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([listingId])
+  @@map("purchases")
+}
+
+model Coupon {
+  id              String    @id @default(cuid())
+  code            String
+  discountPercent Int       @default(10)
+  maxUses         Int       @default(0)
+  usedCount       Int       @default(0)
+  expiresAt       DateTime?
+  active          Boolean   @default(true)
+  listingId       String?
+  listing         Listing?  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  sellerId        String
+  seller          User      @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  createdAt       DateTime  @default(now())
+
+  @@index([sellerId])
+  @@index([listingId])
+  @@index([code])
+  @@map("coupons")
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  userId    String
+  rating    Int      @default(5)
+  comment   String   @default("") @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([listingId])
+  @@map("reviews")
+}
